@@ -60,7 +60,6 @@ ${c}
   <script type="application/json" data-clippy-inline-media-manifest="1">{"version":1,"slots":[]}</script>
 
 <script>
-
 const firebaseConfig = {
   apiKey: "AIzaSyC12dB55WaiMjvUAQP1NzTnKVjxvbDePgaY",
   authDomain: "jullnoon-sketch-9026f.firebaseapp.com",
@@ -70,41 +69,49 @@ const firebaseConfig = {
   appId: "1:953318736209:web:424a9bf44ce4f0222bd370",
   measurementId: "G-L1CZCGHEK9"
 };
-
 (function(){
-  try{
-    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    localStorage.setItem('jullnoon_fb_config', JSON.stringify(firebaseConfig));
-  }catch(e){}
-
-  function getDB(){
-    try{ return firebase.firestore(); }catch(e){return null;}
+  try{ if(!firebase.apps.length) firebase.initializeApp(firebaseConfig); localStorage.setItem('jullnoon_fb_config', JSON.stringify(firebaseConfig)); }catch(e){}
+  function getDB(){ try{ return firebase.firestore(); }catch(e){return null;} }
+  var CHUNK_SIZE = 900000;
+  async function saveToCloud(dataStr){
+    var db=getDB(); if(!db) return false;
+    try{
+      if(dataStr.length <= 1040000){
+        await db.collection('jullnoon_galleries').doc('main').set({data:dataStr, updated:Date.now(), chunks:1});
+        return true;
+      }else{
+        var chunks=[]; for(var i=0;i<dataStr.length;i+=CHUNK_SIZE){ chunks.push(dataStr.substring(i,i+CHUNK_SIZE)); }
+        await db.collection('jullnoon_galleries').doc('main').set({data:"", updated:Date.now(), chunks:chunks.length, chunked:true});
+        for(var j=0;j<chunks.length;j++){ await db.collection('jullnoon_galleries').doc('main_chunk_'+j).set({data:chunks[j], idx:j, updated:Date.now()}); }
+        return true;
+      }
+    }catch(e){ console.error(e); return false; }
   }
-
   async function loadFromCloud(){
-    var db=getDB(); if(!db) return;
+    var db=getDB(); if(!db) return null;
     try{
       var doc=await db.collection('jullnoon_galleries').doc('main').get();
-      if(doc.exists && doc.data().data){
-        localStorage.setItem('jullnoon_galleries_final', doc.data().data);
-        localStorage.setItem('jullnoon_galleries', doc.data().data);
-      }
-    }catch(e){}
+      if(!doc.exists) return null;
+      var d=doc.data();
+      if(d.chunked){
+        var all=""; for(var k=0;k<d.chunks;k++){ var cd=await db.collection('jullnoon_galleries').doc('main_chunk_'+k).get(); if(cd.exists) all+=cd.data().data; }
+        return all;
+      }else{ return d.data; }
+    }catch(e){ return null; }
   }
-  window.addEventListener('load', function(){ setTimeout(loadFromCloud, 1500); });
-
-  var last='';
+  window.addEventListener('load', async function(){ setTimeout(async function(){ var cloudData=await loadFromCloud(); if(cloudData){ var local=localStorage.getItem('jullnoon_galleries_final')||localStorage.getItem('jullnoon_galleries'); if(!local || cloudData.length>local.length){ localStorage.setItem('jullnoon_galleries_final', cloudData); localStorage.setItem('jullnoon_galleries', cloudData); location.reload(); } } },1200); });
+  var lastSaved=''; var saveStatusEl=null;
+  function ensureStatusEl(){ if(saveStatusEl) return saveStatusEl; var btns=[].slice.call(document.querySelectorAll('button')); var logout=btns.find(function(b){return b.textContent.includes('로그아웃');}); if(!logout) return null; var span=document.createElement('span'); span.id='fb-save-status'; span.style.cssText='margin-left:8px;font-size:11px;color:#666;'; logout.parentElement.appendChild(span); saveStatusEl=span; return span; }
   setInterval(async function(){
     try{
       var cur=localStorage.getItem('jullnoon_galleries_final') || localStorage.getItem('jullnoon_galleries');
-      if(!cur || cur===last) return;
-      last=cur;
-      var db=getDB(); if(!db) return;
-      await db.collection('jullnoon_galleries').doc('main').set({data:cur, updated:Date.now()});
+      if(!cur || cur===lastSaved) return;
+      var statusEl=ensureStatusEl(); if(statusEl) statusEl.textContent='저장중... ('+ (cur.length/1024).toFixed(0) +'KB)';
+      var ok=await saveToCloud(cur);
+      if(ok){ lastSaved=cur; if(statusEl) statusEl.textContent='저장 완료 '+ new Date().toLocaleTimeString(); }
+      else{ if(statusEl) statusEl.textContent='저장 실패'; }
     }catch(e){}
-  }, 4000);
-
-  // Badge
+  },3000);
   setInterval(function(){
     if(document.getElementById('fb-auto-badge')) return;
     var btns=[].slice.call(document.querySelectorAll('button'));
@@ -112,11 +119,8 @@ const firebaseConfig = {
     if(!logout) return;
     var badge=document.createElement('span');
     badge.id='fb-auto-badge';
-    var db=getDB();
-    if(db){
-      badge.textContent='클라우드 자동연결 ON';
-      badge.style.cssText='margin-left:8px;background:#E8F5E9;color:#2E7D32;padding:6px 12px;border-radius:12px;font-size:12px;font-weight:bold;border:1px solid #81C784;';
-    }
+    badge.textContent='클라우드 자동연결 ON';
+    badge.style.cssText='margin-left:8px;background:#E8F5E9;color:#2E7D32;padding:6px 12px;border-radius:12px;font-size:12px;font-weight:bold;border:1px solid #81C784;';
     logout.parentElement.appendChild(badge);
   },2000);
 })();
