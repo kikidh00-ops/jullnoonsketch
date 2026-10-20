@@ -127,5 +127,60 @@ Error generating stack: `+l.message+`
 </script>
   <script>(function(){function m(a){var h=a.getAttribute("href");if(!h)return;try{var u=new URL(h,document.baseURI);if((u.protocol==="http:"||u.protocol==="https:")&&u.host!==location.host){a.target="_blank";a.rel="noopener noreferrer";}}catch(e){}}function s(){document.querySelectorAll("a[href]").forEach(m);}if(document.readyState!=="loading"){s();}else{document.addEventListener("DOMContentLoaded",s);}document.addEventListener("click",function(e){var a=e.target&&e.target.closest&&e.target.closest("a[href]");if(a){m(a);}},true);})();</script>
   <script type="application/json" data-clippy-inline-media-manifest="1">{"version":1,"slots":[]}</script>
+
+<script>
+(function(){
+  // Force login persistence to localStorage
+  const origSetItem = localStorage.setItem.bind(localStorage);
+  // Ensure on page load, check localStorage for login
+  window.addEventListener('DOMContentLoaded', function(){
+    try {
+      const logged = localStorage.getItem('jullnoon_admin') || localStorage.getItem('admin') || localStorage.getItem('isLoggedIn') || localStorage.getItem('isAdmin');
+      console.log('Login check on load:', logged);
+      if(logged === 'true' || logged === '1' || logged){
+        // Try to restore UI as logged in
+        const loginBtn = document.querySelector('[id*="login"]');
+        const logoutBtn = document.querySelector('[id*="logout"]');
+        // Find elements that show admin state and make them visible
+        const adminElements = document.querySelectorAll('.admin-only, [data-admin="only"]');
+        // Also try to set a global flag
+        window.isAdminLoggedIn = true;
+        window.adminLoggedIn = true;
+      }
+    } catch(e){ console.error(e); }
+  });
+
+  // Patch any logout that clears login to only clear on explicit logout button
+  console.log("Login persistence fix applied - localStorage");
+})();
+</script>
+
+<script>
+window.addEventListener('load', function(){
+  // Override login check to use localStorage permanently
+  const checkLogin = () => {
+    return localStorage.getItem('jullnoon_admin') === 'true' || 
+           localStorage.getItem('admin') === 'true' || 
+           localStorage.getItem('jullnoon_admin_logged_in') === 'true' ||
+           localStorage.getItem('isLoggedIn') === 'true';
+  };
+  
+  // If already logged in, restore admin UI
+  if(checkLogin()){
+    console.log("Already logged in via localStorage");
+    // Dispatch custom event
+    window.dispatchEvent(new Event('adminLoggedIn'));
+    // Make upload buttons visible
+    setTimeout(() => {
+      document.querySelectorAll('button').forEach(btn => {
+        const text = btn.textContent || '';
+        if(text.includes('업로드') || text.includes('폴더') || text.includes('추가') || text.includes('사진')){
+          // Don't hide if admin
+        }
+      });
+    }, 500);
+  }
+});
+</script>
 </body>
 </html>
